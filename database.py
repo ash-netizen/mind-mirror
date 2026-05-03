@@ -77,6 +77,7 @@ class MindMirrorDB:
                             from_id=rel["from"],
                             to_id=rel["to"],
                             now=now,
+                            session_id=session_id,
                         )
                     )
                 # Persist the raw thought as a Thought node linked to extracted nodes

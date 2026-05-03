@@ -127,38 +127,61 @@ st.markdown(
 
 
 # ============================================================ ACTIVE THREAD
-def _render_extraction_chips(nodes):
-    chips = " ".join(
-        f"<span class='chip' style='color:{CLASS_COLORS.get(n['class'], '#888')}'>"
-        f"{n.get('label', n['id'])}</span>"
-        for n in nodes
-    )
-    st.markdown(f"<div style='margin-top:0.6rem'>{chips}</div>", unsafe_allow_html=True)
+def _html_escape(s: str) -> str:
+    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _render_thread_entry(entry, in_reply_block=False):
     res = entry["result"]
-    cls = "reply-line" if in_reply_block else "thread-block"
+    border_color = "#4361EE" if in_reply_block else "#444"
     label = "You replied" if in_reply_block else "You said"
-    st.markdown(f"<div class='{cls}'>", unsafe_allow_html=True)
-    st.markdown(f"<div class='you-said'>{label}</div>", unsafe_allow_html=True)
-    st.markdown(f"<div class='input-text'>{entry['input']}</div>", unsafe_allow_html=True)
+    indent_style = "margin-left: 1rem;" if in_reply_block else ""
 
-    if res["success"]:
-        nodes = res["extraction"]["nodes"]
-        if nodes:
-            _render_extraction_chips(nodes)
-        if res["contradictions"]:
-            for c in res["contradictions"]:
-                st.markdown(f"<div class='tension-line'>⚠ <strong>Tension:</strong> {c['explanation']}</div>", unsafe_allow_html=True)
-        if res["followup_question"]:
-            st.markdown(f"<div class='followup-line'>↳ {res['followup_question']}</div>", unsafe_allow_html=True)
-    else:
-        st.error(res["message"])
-    st.markdown("</div>", unsafe_allow_html=True)
+    chips_html = ""
+    nodes = res.get("extraction", {}).get("nodes", []) if res["success"] else []
+    if nodes:
+        chip_spans = "".join(
+            f"<span class='chip' style='color:{CLASS_COLORS.get(n.get('class'), '#888')}'>"
+            f"{_html_escape(n.get('label', n.get('id', '')))}</span>"
+            for n in nodes
+        )
+        chips_html = f"<div style='margin-top:0.7rem'>{chip_spans}</div>"
+
+    contradictions_html = ""
+    if res["success"] and res.get("contradictions"):
+        for c in res["contradictions"]:
+            contradictions_html += (
+                f"<div class='tension-line'>⚠ <strong>Tension:</strong> "
+                f"{_html_escape(c.get('explanation', ''))}</div>"
+            )
+
+    followup_html = ""
+    if res["success"] and res.get("followup_question"):
+        followup_html = (
+            f"<div class='followup-line'>↳ {_html_escape(res['followup_question'])}</div>"
+        )
+
+    # One single HTML block — avoids streamlit-markdown re-wrapping mid-div
+    block = (
+        f"<div style='background:rgba(255,255,255,0.02);border:1px solid #2a2a2a;"
+        f"border-left:3px solid {border_color};border-radius:8px;"
+        f"padding:1.1rem 1.3rem;margin:1rem 0;{indent_style}'>"
+        f"<div class='you-said' style='font-size:0.74rem;color:#888;"
+        f"text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;'>{label}</div>"
+        f"<div style='font-size:1.02rem;line-height:1.55;color:#e8e8e8;white-space:pre-wrap;'>"
+        f"{_html_escape(entry['input'])}</div>"
+        f"{chips_html}"
+        f"{contradictions_html}"
+        f"{followup_html}"
+        f"</div>"
+    )
+    st.markdown(block, unsafe_allow_html=True)
+
+    # Errors rendered separately because st.error has its own markup
+    if not res["success"]:
+        st.error(res.get("message", "Unknown error"))
 
 
-# Render the active thread (compact: first entry as block, replies indented)
 if st.session_state.active_thread:
     for i, entry in enumerate(st.session_state.active_thread):
         _render_thread_entry(entry, in_reply_block=(i > 0))

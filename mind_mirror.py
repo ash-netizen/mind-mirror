@@ -142,15 +142,25 @@ class MindMirrorEngine:
             return []
 
     def _generate_followup(self, raw_input, nodes, contradictions):
+        # Pull context from the wider map so the question feels like it remembers the user
+        recurring = self.db.get_recurring_nodes(min_times_seen=2, limit=8)
+        recent_nodes, _ = self.db.get_recent_changes(days=14)
+        sample = self.db.get_sample_nodes(limit=15)
+
         payload = json.dumps({
-            "raw_thought": raw_input,
-            "extracted_nodes": [
+            "what_user_just_said": raw_input,
+            "extracted_from_this_thought": [
                 {"id": n["id"], "class": n.get("class"), "label": n.get("label")}
                 for n in nodes
             ],
-            "contradictions": contradictions,
+            "contradictions_just_detected": contradictions,
+            "recurring_load_bearers_in_their_map": recurring,
+            "recent_nodes_last_14_days": recent_nodes[:10],
+            "other_nodes_in_their_map": [
+                {"label": s["label"], "class": s.get("class")} for s in sample
+            ],
         })
-        return self._chat(FOLLOWUP_PROMPT, payload, temperature=0.5).strip().strip('"')
+        return self._chat(FOLLOWUP_PROMPT, payload, temperature=0.6).strip().strip('"')
 
     # ---------------------------------------------------------------- insight
     def generate_insight(self, session_id=None):
