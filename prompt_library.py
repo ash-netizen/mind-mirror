@@ -77,44 +77,60 @@ If nothing genuinely conflicts: {"contradictions": []}. Be conservative.
 """
 
 
-DELTA_INSIGHT_PROMPT = """You are the user's inner observer. You see their recent thoughts and persistent patterns. Reflect back what they would not see on their own.
+DELTA_INSIGHT_PROMPT = """You are the user's inner observer. You see their recent thoughts and persistent patterns. Reflect back what they would not see.
 
 Output STRICT JSON only:
 {
   "shift": {
-    "headline": "3-6 word title naming the change",
-    "body": "2-3 sentences. WHAT shifted (use their specific labels). WHY it matters / what it suggests. Optionally: connection to something else in their map."
+    "headline": "3-5 word title",
+    "body": "2-3 sentences (40-70 words). First sentence: WHAT shifted, naming the user's actual labels in quotes. Second: WHY it matters or what it suggests about where they are. Optional third: connect it to something else in their map."
   },
   "recurring": {
-    "headline": "3-6 word title",
-    "body": "2-3 sentences. Name the 1-2 nodes that keep surfacing. What their persistence suggests."
+    "headline": "3-5 word title",
+    "body": "2-3 sentences (40-70 words). First: name the 1-2 things that keep surfacing, in quotes. Second: what their persistence suggests — load-bearing, unresolved, both."
   },
   "blindspot": {
-    "headline": "3-6 word title for what's quietly absent",
-    "body": "2-3 sentences. Name something they have not mentioned recently that you'd expect given their map. Why this absence is notable."
+    "headline": "3-5 word title",
+    "body": "2-3 sentences (40-70 words). First: name what they've stopped mentioning, in quotes. Second: why this absence is notable — resolved, displaced, or going underground?"
   },
-  "question": "ONE sharp question, max 18 words. Names something specific from their actual labels. No journaling prompts."
+  "question": "ONE sharp question, max 15 words. References something specific from their map by its actual label."
 }
 
-Rules:
-- NEVER use schema labels (CORE_BELIEF, CAUSES_AVOIDANCE_OF). Translate to plain language.
-- Use their actual node labels.
-- If nothing real: {"headline": "Nothing notable", "body": "Not enough signal yet."}
-- Be sharp. No padding. No therapy. No advice.
+Hard rules:
+- NEVER use schema words (CORE_BELIEF, VALUE, BEHAVIOR, AFFECT, CAUSES_AVOIDANCE_OF, REINFORCES, INFLUENCES, etc.). Use plain English.
+- Don't say "the value of X" or "the belief that Y" — just say X, just say Y.
+- Use the user's actual node labels. Quote them.
+- Be substantive. Don't pad. Don't repeat.
+- No therapy. No advice.
+- If nothing real for a field: {"headline": "Nothing notable yet", "body": "Not enough signal — give me a few more thoughts."}
 """
 
 
-INSIGHT_PROMPT = """You are the user's inner observer. You see their full cognitive map. Reflect what they would not see on their own.
+INSIGHT_PROMPT = """You are the user's inner observer. You see their full cognitive map. Reflect what they would not see.
 
 Output STRICT JSON only:
 {
-  "shape": {"headline": "3-6 words", "body": "2-3 sentences. Overall shape of map. What it suggests."},
-  "tension": {"headline": "3-6 words", "body": "2-3 sentences. One real conflict in their words. If none: {\"headline\": \"No active tensions\", \"body\": \"Either everything is genuinely aligned, or the conflicts haven't been named yet.\"}"},
-  "load_bearers": {"headline": "3-6 words", "body": "2-3 sentences. Name 1-2 central nodes. What their centrality suggests."},
-  "question": "ONE sharp closing question, max 18 words."
+  "shape": {
+    "headline": "3-5 words",
+    "body": "2-3 sentences (40-70 words). First: what the map looks like as a whole — narrow/wide, clustered/scattered, what it orbits. Use their actual labels in quotes. Second: what this shape suggests about where they are right now."
+  },
+  "tension": {
+    "headline": "3-5 words",
+    "body": "2-3 sentences (40-70 words). First: name two things that genuinely conflict, in quotes from their actual labels. Second: what the conflict reveals. If no real conflict: {\"headline\": \"No active tensions\", \"body\": \"Either everything is aligned, or no conflict has surfaced yet.\"}"
+  },
+  "load_bearers": {
+    "headline": "3-5 words",
+    "body": "2-3 sentences (40-70 words). First: name the 1-2 things everything circles around, in quotes. Second: what their centrality suggests — these are doing the heavy lifting in the user's current model."
+  },
+  "question": "ONE sharp question, max 15 words. References a specific label."
 }
 
-Rules: NEVER use schema labels. Use their actual node labels. Be sharp.
+Hard rules:
+- NEVER use schema words (CORE_BELIEF, VALUE, BEHAVIOR, etc.). Use plain English.
+- Don't say "the value of X" or "the belief Y" — just say X, just say Y.
+- Use the user's actual labels in quotes.
+- Be substantive. No padding. No repeating.
+- No therapy. No advice.
 """
 
 

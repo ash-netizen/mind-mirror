@@ -263,6 +263,44 @@ def _unwrap(obj):
     return "—", ""
 
 
+def _render_answer_box(question, key_suffix):
+    """Inline answer box that feeds the question + answer back through respond()."""
+    with st.form(f"answer_form_{key_suffix}", clear_on_submit=True):
+        ans = st.text_area(
+            "Answer",
+            placeholder="Reply to this question…",
+            height=90,
+            label_visibility="collapsed",
+            key=f"ans_{key_suffix}",
+        )
+        if st.form_submit_button("Answer", use_container_width=False):
+            if len(ans.strip()) < 3:
+                st.warning("Say a little more.")
+            else:
+                framed = f"(answering your question: \"{question}\")\n\n{ans}"
+                with st.spinner("Mirror is thinking..."):
+                    recent_history = [
+                        {"you": e["input"], "mirror": e.get("response", "")}
+                        for e in st.session_state.exchanges[-4:]
+                    ]
+                    result = mirror.respond(framed, recent_history=recent_history)
+                    st.session_state.exchanges.append({
+                        "input": ans,
+                        "response": result.get("response", ""),
+                        "type": result.get("type", "cognitive"),
+                        "followups": result.get("followups", []),
+                        "extraction": result.get("extraction", {}),
+                        "contradictions": result.get("contradictions", []),
+                        "persisted": result.get("persisted", False),
+                        "error": result.get("error"),
+                    })
+                # Clear the report so the answer becomes the new focus
+                st.session_state.delta_report = None
+                st.session_state.full_report = None
+                _refresh_stats()
+                st.rerun()
+
+
 if st.session_state.delta_report:
     rep = st.session_state.delta_report
     if "error" in rep:
@@ -277,6 +315,7 @@ if st.session_state.delta_report:
             _card(kind, title, h, b)
         if rep.get("question"):
             _card("question", "Question for you", rep["question"], "")
+            _render_answer_box(rep["question"], "delta")
 
 if st.session_state.full_report:
     rep = st.session_state.full_report
@@ -292,6 +331,7 @@ if st.session_state.full_report:
             _card(kind, title, h, b)
         if rep.get("question"):
             _card("question", "Question for you", rep["question"], "")
+            _render_answer_box(rep["question"], "full")
 
 
 # ============================================================ MAP

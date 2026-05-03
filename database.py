@@ -7,6 +7,17 @@ from neo4j import GraphDatabase
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
 
+
+def _display(label_or_id):
+    """Convert snake_case ids into readable text when no label exists."""
+    if not label_or_id:
+        return ""
+    s = str(label_or_id)
+    # heuristic: only treat as snake_case if no spaces
+    if " " not in s and "_" in s:
+        return s.replace("_", " ")
+    return s
+
 NODE_CLASSES = {
     "CORE_BELIEF", "VALUE", "TRIGGER", "COGNITIVE_PROCESS",
     "AFFECT", "BEHAVIOR", "INTENT", "PATTERN",
@@ -105,7 +116,7 @@ class MindMirrorDB:
             return False, str(e), []
 
     def get_recent_changes(self, days=7):
-        """Return nodes + edges created in the last N days."""
+        """Return nodes + edges created in the last N days. Labels humanized."""
         from datetime import timedelta
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         nodes_q = (
@@ -120,8 +131,18 @@ class MindMirrorDB:
         )
         with self._session() as session:
             try:
-                new_nodes = [dict(r) for r in session.run(nodes_q, cutoff=cutoff)]
-                new_rels = [dict(r) for r in session.run(rels_q, cutoff=cutoff)]
+                new_nodes = []
+                for r in session.run(nodes_q, cutoff=cutoff):
+                    d = dict(r)
+                    d["label"] = _display(d.get("label") or d.get("id"))
+                    new_nodes.append(d)
+                new_rels = []
+                for r in session.run(rels_q, cutoff=cutoff):
+                    d = dict(r)
+                    d["source"] = _display(d.get("source"))
+                    d["target"] = _display(d.get("target"))
+                    d["rel"] = d["rel"].lower().replace("_", " ")
+                    new_rels.append(d)
                 return new_nodes, new_rels
             except Exception as e:
                 print(f"❌ Recent changes error: {e}")
@@ -137,7 +158,12 @@ class MindMirrorDB:
         )
         with self._session() as session:
             try:
-                return [dict(r) for r in session.run(q, mts=min_times_seen, limit=limit)]
+                rows = []
+                for r in session.run(q, mts=min_times_seen, limit=limit):
+                    d = dict(r)
+                    d["label"] = _display(d.get("label") or d.get("id"))
+                    rows.append(d)
+                return rows
             except Exception as e:
                 print(f"❌ Recurring nodes error: {e}")
                 return []
@@ -181,9 +207,10 @@ class MindMirrorDB:
                 result = session.run(query, **params)
                 triplets = set()
                 for record in result:
-                    a = record["n"].get("label") or record["n"].get("id")
-                    b = record["m"].get("label") or record["m"].get("id")
-                    triplets.add(f"[{a}] --{record['rel_type']}--> [{b}]")
+                    a = _display(record["n"].get("label") or record["n"].get("id"))
+                    b = _display(record["m"].get("label") or record["m"].get("id"))
+                    rel = record["rel_type"].lower().replace("_", " ")
+                    triplets.add(f"[{a}] --{rel}--> [{b}]")
                 return "\n".join(sorted(triplets))
             except Exception as e:
                 print(f"❌ Retrieval Error: {e}")
@@ -267,7 +294,12 @@ class MindMirrorDB:
         )
         with self._session() as session:
             try:
-                return [dict(r) for r in session.run(q, limit=limit)]
+                rows = []
+                for r in session.run(q, limit=limit):
+                    d = dict(r)
+                    d["label"] = _display(d.get("label") or d.get("id"))
+                    rows.append(d)
+                return rows
             except Exception as e:
                 print(f"❌ Sample nodes error: {e}")
                 return []
