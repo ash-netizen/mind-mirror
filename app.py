@@ -37,20 +37,23 @@ CLASS_LABEL = {
 st.markdown(
     """
     <style>
-      .block-container { max-width: 760px; padding-top: 2rem; padding-bottom: 4rem; }
-      .stTextArea textarea { font-size: 1.05rem; line-height: 1.55; }
-      .greeting { font-size: 1.05rem; color: #c9c9c9; line-height: 1.6; margin: 0.25rem 0 1.25rem 0; font-style: italic; }
-      .status-strip { font-size: 0.78rem; color: #777; margin-bottom: 1.5rem; letter-spacing: 0.02em; }
-      .status-strip .dot { color: #444; margin: 0 0.5rem; }
-      .thread-block { background: rgba(255,255,255,0.02); border: 1px solid #2a2a2a; border-radius: 8px; padding: 1.25rem 1.4rem; margin: 1rem 0; }
-      .thread-block .you-said { font-size: 0.74rem; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.5rem; }
-      .thread-block .input-text { font-size: 1.02rem; line-height: 1.55; color: #ddd; }
-      .reply-line { border-left: 2px solid #4361EE; margin-left: 0.5rem; padding: 0.75rem 0 0.75rem 1rem; margin-top: 1rem; }
-      .reply-line .you-said { color: #6a8eff; }
+      .block-container { max-width: 720px; padding-top: 2rem; padding-bottom: 5rem; }
+      .stTextArea textarea { font-size: 1.05rem; line-height: 1.55; background: rgba(255,255,255,0.03); }
+      .greeting { font-size: 1rem; color: #b8b8b8; line-height: 1.6; margin: 0.25rem 0 1.25rem 0; font-style: italic; }
+      .status-strip { font-size: 0.78rem; color: #777; margin-bottom: 1.5rem; }
+      .status-strip .dot { color: #444; margin: 0 0.45rem; }
+      .you-bubble { padding: 0.85rem 1.1rem; background: rgba(255,255,255,0.04); border-radius: 12px 12px 12px 2px; margin: 0.4rem 0 0.6rem 0; font-size: 0.98rem; line-height: 1.55; color: #ddd; }
+      .you-meta { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 0.06em; margin: 1.4rem 0 0.2rem 0; }
+      .mirror-bubble { padding: 0.95rem 1.15rem; background: linear-gradient(180deg, rgba(99,90,255,0.08) 0%, rgba(99,90,255,0.04) 100%); border-left: 3px solid #6a5cff; border-radius: 2px 12px 12px 12px; margin: 0.4rem 0 0.5rem 0; font-size: 1rem; line-height: 1.6; color: #f0f0f0; }
+      .mirror-meta { font-size: 0.7rem; color: #6a5cff; text-transform: uppercase; letter-spacing: 0.06em; margin: 1rem 0 0.2rem 0; }
+      .followup-pill { display: inline-block; padding: 8px 14px; margin: 4px 6px 4px 0; border-radius: 20px; background: rgba(255, 214, 102, 0.08); border: 1px solid rgba(255, 214, 102, 0.25); color: #ffd966; font-size: 0.88rem; cursor: default; }
+      .chip-strip { margin: 0.5rem 0 0.2rem 0; }
+      .chip { display: inline-block; padding: 2px 9px; margin: 2px 4px 2px 0; border-radius: 12px; font-size: 0.74rem; background: rgba(255,255,255,0.04); }
+      .tension-banner { padding: 0.6rem 0.9rem; background: rgba(230, 57, 70, 0.08); border-left: 3px solid #E63946; border-radius: 4px; color: #ff9999; font-size: 0.9rem; margin: 0.5rem 0; }
       .insight-card { background: rgba(255,255,255,0.03); border-left: 3px solid #4361EE; padding: 0.95rem 1.15rem; border-radius: 4px; margin: 0.6rem 0; }
-      .insight-card .ic-title { font-size: 0.72rem; color: #888; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.35rem; }
-      .insight-card .ic-headline { font-size: 1.05rem; font-weight: 600; color: #f0f0f0; margin-bottom: 0.4rem; line-height: 1.35; }
-      .insight-card .ic-body { font-size: 0.93rem; color: #cccccc; line-height: 1.55; }
+      .insight-card .ic-title { font-size: 0.7rem; color: #888; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.35rem; }
+      .insight-card .ic-headline { font-size: 1.02rem; font-weight: 600; color: #f0f0f0; margin-bottom: 0.4rem; line-height: 1.35; }
+      .insight-card .ic-body { font-size: 0.92rem; color: #cccccc; line-height: 1.55; }
       .insight-card.shift { border-left-color: #06A77D; }
       .insight-card.recurring { border-left-color: #F4A261; }
       .insight-card.blindspot { border-left-color: #E76F51; }
@@ -58,9 +61,6 @@ st.markdown(
       .insight-card.shape { border-left-color: #9D4EDD; }
       .insight-card.tension { border-left-color: #E63946; }
       .insight-card.load { border-left-color: #2A9D8F; }
-      .chip { display: inline-block; padding: 2px 9px; margin: 2px 4px 2px 0; border-radius: 12px; font-size: 0.78rem; background: rgba(255,255,255,0.05); }
-      .tension-line { color: #ff9999; font-size: 0.92rem; margin: 0.6rem 0; }
-      .followup-line { color: #ffd966; font-size: 0.95rem; margin: 0.7rem 0 0.4rem 0; line-height: 1.5; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -68,9 +68,11 @@ st.markdown(
 
 
 def _scope_to_sid(scope_label: str):
-    if scope_label == "All sessions":
-        return None
-    return scope_label.split(" (")[0]
+    return None if scope_label == "All sessions" else scope_label.split(" (")[0]
+
+
+def _html_escape(s):
+    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _init_state():
@@ -80,9 +82,8 @@ def _init_state():
             st.session_state.greeting = st.session_state.mirror.generate_greeting()
             st.session_state.stats = st.session_state.mirror.get_snapshot_stats()
     st.session_state.setdefault("view_scope", "All sessions")
-    # active_thread = list of {input, result, is_reply}, in order; replaces old multi-thread "journal"
-    st.session_state.setdefault("active_thread", [])
-    st.session_state.setdefault("archived_threads", [])  # list of lists
+    # exchanges: list of {input, response, type, followups, extraction, contradictions, persisted}
+    st.session_state.setdefault("exchanges", [])
     st.session_state.setdefault("ingesting", False)
     st.session_state.setdefault("confirm_nuke", False)
     st.session_state.setdefault("selected_node", None)
@@ -94,25 +95,18 @@ def _refresh_stats():
     st.session_state.stats = st.session_state.mirror.get_snapshot_stats()
 
 
-def _archive_active_thread():
-    if st.session_state.active_thread:
-        st.session_state.archived_threads.append(st.session_state.active_thread)
-        st.session_state.active_thread = []
-
-
 _init_state()
 mirror = st.session_state.mirror
 
 # ============================================================ HEADER
 st.markdown("# 🪞 Mind Mirror")
-st.markdown(f"<div class='greeting'>{st.session_state.greeting}</div>", unsafe_allow_html=True)
+st.markdown(f"<div class='greeting'>{_html_escape(st.session_state.greeting)}</div>", unsafe_allow_html=True)
 
-# Subtle status strip (no loud tiles)
 stats = st.session_state.stats
 recurring_str = ""
 if stats["top_recurring"]:
     recurring_str = " · returning to: " + ", ".join(
-        f"<span style='color:{CLASS_COLORS.get(r['class'], '#888')}'>{r['label']}</span>"
+        f"<span style='color:{CLASS_COLORS.get(r['class'], '#888')}'>{_html_escape(r['label'])}</span>"
         for r in stats["top_recurring"][:2]
     )
 st.markdown(
@@ -126,121 +120,109 @@ st.markdown(
 )
 
 
-# ============================================================ ACTIVE THREAD
-def _html_escape(s: str) -> str:
-    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+# ============================================================ EXCHANGES
+def _render_exchange(ex):
+    # User bubble
+    st.markdown("<div class='you-meta'>You</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='you-bubble'>{_html_escape(ex['input'])}</div>", unsafe_allow_html=True)
 
+    # Mirror bubble
+    st.markdown("<div class='mirror-meta'>Mirror</div>", unsafe_allow_html=True)
+    body_parts = [f"<div class='mirror-bubble'>{_html_escape(ex.get('response', ''))}"]
 
-def _render_thread_entry(entry, in_reply_block=False):
-    res = entry["result"]
-    border_color = "#4361EE" if in_reply_block else "#444"
-    label = "You replied" if in_reply_block else "You said"
-    indent_style = "margin-left: 1rem;" if in_reply_block else ""
+    if ex.get("contradictions"):
+        for c in ex["contradictions"]:
+            body_parts.append(
+                f"<div class='tension-banner'>⚠ <strong>Tension:</strong> "
+                f"{_html_escape(c.get('explanation', ''))}</div>"
+            )
 
-    chips_html = ""
-    nodes = res.get("extraction", {}).get("nodes", []) if res["success"] else []
+    if ex.get("followups"):
+        pills = " ".join(
+            f"<span class='followup-pill'>{_html_escape(q)}</span>"
+            for q in ex["followups"]
+        )
+        body_parts.append(f"<div style='margin-top:0.7rem'>{pills}</div>")
+
+    nodes = ex.get("extraction", {}).get("nodes", [])
     if nodes:
         chip_spans = "".join(
             f"<span class='chip' style='color:{CLASS_COLORS.get(n.get('class'), '#888')}'>"
             f"{_html_escape(n.get('label', n.get('id', '')))}</span>"
             for n in nodes
         )
-        chips_html = f"<div style='margin-top:0.7rem'>{chip_spans}</div>"
-
-    contradictions_html = ""
-    if res["success"] and res.get("contradictions"):
-        for c in res["contradictions"]:
-            contradictions_html += (
-                f"<div class='tension-line'>⚠ <strong>Tension:</strong> "
-                f"{_html_escape(c.get('explanation', ''))}</div>"
-            )
-
-    followup_html = ""
-    if res["success"] and res.get("followup_question"):
-        followup_html = (
-            f"<div class='followup-line'>↳ {_html_escape(res['followup_question'])}</div>"
+        body_parts.append(
+            f"<div class='chip-strip' style='margin-top:0.7rem'>"
+            f"<span style='font-size:0.68rem; color:#888; text-transform:uppercase; letter-spacing:0.05em; margin-right:0.5rem;'>mapped</span>"
+            f"{chip_spans}</div>"
         )
 
-    # One single HTML block — avoids streamlit-markdown re-wrapping mid-div
-    block = (
-        f"<div style='background:rgba(255,255,255,0.02);border:1px solid #2a2a2a;"
-        f"border-left:3px solid {border_color};border-radius:8px;"
-        f"padding:1.1rem 1.3rem;margin:1rem 0;{indent_style}'>"
-        f"<div class='you-said' style='font-size:0.74rem;color:#888;"
-        f"text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem;'>{label}</div>"
-        f"<div style='font-size:1.02rem;line-height:1.55;color:#e8e8e8;white-space:pre-wrap;'>"
-        f"{_html_escape(entry['input'])}</div>"
-        f"{chips_html}"
-        f"{contradictions_html}"
-        f"{followup_html}"
-        f"</div>"
-    )
-    st.markdown(block, unsafe_allow_html=True)
-
-    # Errors rendered separately because st.error has its own markup
-    if not res["success"]:
-        st.error(res.get("message", "Unknown error"))
+    body_parts.append("</div>")
+    st.markdown("".join(body_parts), unsafe_allow_html=True)
 
 
-if st.session_state.active_thread:
-    for i, entry in enumerate(st.session_state.active_thread):
-        _render_thread_entry(entry, in_reply_block=(i > 0))
+# Show recent exchanges (newest at bottom — natural reading flow)
+exchanges = st.session_state.exchanges
+RECENT = 5
+recent = exchanges[-RECENT:]
+older = exchanges[:-RECENT]
+
+if older:
+    with st.expander(f"Earlier this visit ({len(older)})"):
+        for ex in older:
+            _render_exchange(ex)
+
+for ex in recent:
+    _render_exchange(ex)
 
 
 # ============================================================ INPUT
-# Determine whether next commit is a reply (extends active thread) or a new thought.
-is_reply_mode = bool(st.session_state.active_thread) and bool(
-    st.session_state.active_thread[-1]["result"].get("followup_question")
-)
-
-input_label = "Reply" if is_reply_mode else ("Continue" if st.session_state.active_thread else "What's on your mind?")
-input_placeholder = (
-    "Reply to the question above…"
-    if is_reply_mode
-    else ("Add another thought to this thread…" if st.session_state.active_thread else "A thought, a tension, something you noticed…")
-)
+st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
 with st.form("intake_form", clear_on_submit=True):
     thought_input = st.text_area(
-        input_label,
-        placeholder=input_placeholder,
-        height=130,
+        " ",
+        placeholder="Ask anything. Share anything. The mirror listens.",
+        height=120,
+        label_visibility="collapsed",
     )
-    cols = st.columns([3, 1])
-    with cols[0]:
-        submitted = st.form_submit_button(
-            "Commit",
-            type="primary",
-            use_container_width=True,
-            disabled=st.session_state.ingesting,
-        )
-    with cols[1]:
-        # Show "New thread" button only when there's already content in the active thread
-        new_thread_clicked = False
-        if st.session_state.active_thread:
-            new_thread_clicked = st.form_submit_button("New thread", use_container_width=True)
-        else:
-            st.write("")  # keep layout stable
-
-if new_thread_clicked:
-    _archive_active_thread()
-    st.rerun()
+    submitted = st.form_submit_button(
+        "Send",
+        type="primary",
+        use_container_width=True,
+        disabled=st.session_state.ingesting,
+    )
 
 if submitted:
-    if len(thought_input.strip()) < 10:
-        st.warning("Give me a bit more — at least a sentence.")
+    if len(thought_input.strip()) < 3:
+        st.warning("Say a little more.")
     else:
         st.session_state.ingesting = True
-        with st.spinner("Reading you..."):
-            result = mirror.ingest_thought(thought_input)
-        st.session_state.active_thread.append({
-            "input": thought_input,
-            "result": result,
-            "is_reply": is_reply_mode,
-        })
+        with st.spinner("Mirror is thinking..."):
+            # Pass last 4 exchanges as context for continuity
+            recent_history = [
+                {"you": e["input"], "mirror": e.get("response", "")}
+                for e in exchanges[-4:]
+            ]
+            result = mirror.respond(thought_input, recent_history=recent_history)
+            st.session_state.exchanges.append({
+                "input": thought_input,
+                "response": result.get("response", ""),
+                "type": result.get("type", "cognitive"),
+                "followups": result.get("followups", []),
+                "extraction": result.get("extraction", {}),
+                "contradictions": result.get("contradictions", []),
+                "persisted": result.get("persisted", False),
+                "error": result.get("error"),
+            })
         st.session_state.ingesting = False
-        _refresh_stats()
+        if result.get("type") == "cognitive" and result.get("persisted"):
+            _refresh_stats()
         st.rerun()
+
+# Show error from latest exchange if any
+if exchanges and exchanges[-1].get("error"):
+    st.error(exchanges[-1]["error"])
 
 
 # ============================================================ REFLECT
@@ -266,15 +248,14 @@ def _card(kind, title, headline, body):
     st.markdown(
         f"<div class='insight-card {kind}'>"
         f"<div class='ic-title'>{title}</div>"
-        f"<div class='ic-headline'>{headline}</div>"
-        f"<div class='ic-body'>{body}</div>"
+        f"<div class='ic-headline'>{_html_escape(headline)}</div>"
+        f"<div class='ic-body'>{_html_escape(body)}</div>"
         f"</div>",
         unsafe_allow_html=True,
     )
 
 
 def _unwrap(obj):
-    """Handle both old (string) and new (dict) shapes from prompts."""
     if isinstance(obj, dict):
         return obj.get("headline", "—"), obj.get("body", "—")
     if isinstance(obj, str):
@@ -313,22 +294,12 @@ if st.session_state.full_report:
             _card("question", "Question for you", rep["question"], "")
 
 
-# ============================================================ ARCHIVE (past threads)
-if st.session_state.archived_threads:
-    st.markdown("---")
-    with st.expander(f"📂 {len(st.session_state.archived_threads)} earlier thread(s) this visit"):
-        for ti, thread in enumerate(reversed(st.session_state.archived_threads)):
-            st.markdown(f"**Thread {len(st.session_state.archived_threads) - ti}**")
-            for i, entry in enumerate(thread):
-                input_short = entry["input"][:120] + ("..." if len(entry["input"]) > 120 else "")
-                tag = "↳ " if i > 0 else "• "
-                st.markdown(f"{tag}_{input_short}_")
-            st.markdown("---")
-
-
 # ============================================================ MAP
 st.markdown("---")
-st.markdown(f"### 🗺 Your map  <span style='font-size:0.85rem; color:#888; font-weight:normal'>· {stats['total_nodes']} nodes · scope: {st.session_state.view_scope}</span>", unsafe_allow_html=True)
+st.markdown(
+    f"### 🗺 Your map  <span style='font-size:0.85rem; color:#888; font-weight:normal'>· {stats['total_nodes']} nodes · scope: {st.session_state.view_scope}</span>",
+    unsafe_allow_html=True,
+)
 map_expanded = st.toggle("Show map", value=False)
 
 if map_expanded:
@@ -342,11 +313,11 @@ if map_expanded:
 
     if not nodes_data:
         if stats["total_nodes"] == 0:
-            st.info("Your map is empty. Commit a thought above and watch it grow.")
+            st.info("Your map is empty. Send a thought above and watch it grow.")
         else:
             st.warning(
-                f"Map has {stats['total_nodes']} nodes but none match the current view scope. "
-                f"Switch scope to **All sessions** in the sidebar."
+                f"Map has {stats['total_nodes']} nodes but none match the current scope. "
+                f"Switch to **All sessions** in the sidebar."
             )
     else:
         seen_ids = set()
@@ -444,7 +415,6 @@ if map_expanded:
                     meta_bits.append(f"last seen {details['last_seen_at'][:10]}")
                 if meta_bits:
                     st.caption(" · ".join(meta_bits))
-
                 if details["thoughts"]:
                     st.markdown("**Originating thoughts**")
                     for t in details["thoughts"][:5]:
@@ -453,14 +423,12 @@ if map_expanded:
                             f"<span style='font-size:0.75rem;color:#888'>{t['created_at'][:10]}</span>",
                             unsafe_allow_html=True,
                         )
-
                 if details["neighbors"]:
                     st.markdown("**Connected to**")
                     for nb in details["neighbors"][:15]:
                         arrow = "→" if nb["outgoing"] else "←"
                         rel = nb["rel"].lower().replace("_", " ")
                         st.markdown(f"- {arrow} `{nb['label'] or nb['id']}` *({rel})*")
-
                 if st.button("Close", key="close_node_detail"):
                     st.session_state.selected_node = None
                     st.rerun()
@@ -471,8 +439,8 @@ with st.sidebar:
     st.markdown("### Sessions")
     st.caption(f"Writing to `{mirror.session_id}`")
     if st.button("Start new session", use_container_width=True):
-        _archive_active_thread()
         mirror.start_new_session()
+        st.session_state.exchanges = []
         st.session_state.greeting = mirror.generate_greeting()
         _refresh_stats()
         st.rerun()
@@ -503,8 +471,7 @@ with st.sidebar:
             if st.button("Yes, nuke", type="primary", use_container_width=True):
                 mirror.db.reset()
                 st.session_state.confirm_nuke = False
-                st.session_state.active_thread = []
-                st.session_state.archived_threads = []
+                st.session_state.exchanges = []
                 st.session_state.greeting = mirror.generate_greeting()
                 _refresh_stats()
                 st.rerun()
@@ -514,4 +481,4 @@ with st.sidebar:
                 st.rerun()
 
     st.markdown("---")
-    st.caption("Mind Mirror v2.3")
+    st.caption("Mind Mirror v3.0")

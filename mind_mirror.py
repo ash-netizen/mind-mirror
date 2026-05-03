@@ -8,9 +8,9 @@ from groq import Groq
 from database import MindMirrorDB
 from prompt_library import (
     EXTRACTION_PROMPT,
+    MIRROR_PROMPT,
     INSIGHT_PROMPT,
     CONTRADICTION_PROMPT,
-    FOLLOWUP_PROMPT,
     DELTA_INSIGHT_PROMPT,
     GREETING_PROMPT,
 )
@@ -53,54 +53,103 @@ class MindMirrorEngine:
         except Exception as e:
             raise RuntimeError(f"Groq API error: {e}")
 
-    # ---------------------------------------------------------------- ingest
-    def ingest_thought(self, raw_input):
-        """Extract → validate → persist → detect contradictions → generate follow-up."""
-        result = {
-            "success": False,
-            "message": "",
-            "extraction": {"nodes": [], "relationships": []},
-            "contradictions": [],
-            "followup_question": None,
+    def _build_map_context(self):
+        """The 'memory' passed to every LLM call so responses feel context-aware."""
+        recurring = self.db.get_recurring_nodes(min_times_seen=2, limit=8)
+        recent_nodes, _ = self.db.get_recent_changes(days=14)
+        sample = self.db.get_sample_nodes(limit=20)
+        sessions = self.db.list_sessions()
+        return {
+            "total_nodes_in_map": sum(c for _, c in sessions),
+            "recurring_nodes": recurring,
+            "recent_nodes_last_14_days": recent_nodes[:10],
+            "other_nodes_in_map": [
+                {"label": s["label"], "class": s.get("class")} for s in sample
+            ],
         }
 
+    # ============================================================ MAIN
+    def respond(self, raw_input, recent_history=None):
+        """
+        The single unified entry point. Takes raw input + recent conversation history.
+
+        Returns:
+        {
+          "type": "meta" | "cognitive",
+          "response": str,
+          "followups": [str, ...],
+          "extraction": {nodes, relationships},
+          "contradictions": [...],
+          "persisted": bool,
+          "message": str,
+          "error": str | None
+        }
+        """
+        result = {
+            "type": "cognitive",
+            "response": "",
+            "followups": [],
+            "extraction": {"nodes": [], "relationships": []},
+            "contradictions": [],
+            "persisted": False,
+            "message": "",
+            "error": None,
+        }
+
+        map_context = self._build_map_context()
+
+        # --- 1. Mirror call: voice + routing + followups
         try:
-            raw_json = self._chat(EXTRACTION_PROMPT, raw_input, json_mode=True)
-            data = json.loads(raw_json)
-        except json.JSONDecodeError as e:
-            result["message"] = f"LLM returned invalid JSON: {e}"
-            return result
+            mirror_payload = json.dumps({
+                "what_user_just_said": raw_input,
+                "recent_conversation_history": recent_history or [],
+                "their_map": map_context,
+            })
+            raw = self._chat(MIRROR_PROMPT, mirror_payload, json_mode=True, temperature=0.6)
+            mirror_data = json.loads(raw)
+            result["type"] = mirror_data.get("type", "cognitive")
+            result["response"] = mirror_data.get("response", "").strip()
+            followups = mirror_data.get("followups", []) or []
+            # filter any empty/None entries
+            result["followups"] = [q.strip() for q in followups if q and q.strip()][:2]
         except Exception as e:
-            result["message"] = f"LLM call failed: {e}"
+            result["error"] = f"Inner voice call failed: {e}"
             return result
 
-        nodes = data.get("nodes", [])
-        relationships = data.get("relationships", [])
-        result["extraction"] = {"nodes": nodes, "relationships": relationships}
+        # --- 2. If meta, we're done — no extraction, no persistence
+        if result["type"] == "meta":
+            return result
+
+        # --- 3. Cognitive: extract structure
+        try:
+            ext_raw = self._chat(EXTRACTION_PROMPT, raw_input, json_mode=True)
+            ext_data = json.loads(ext_raw)
+            nodes = ext_data.get("nodes", [])
+            relationships = ext_data.get("relationships", [])
+            result["extraction"] = {"nodes": nodes, "relationships": relationships}
+        except Exception as e:
+            result["error"] = f"Extraction failed: {e}"
+            return result
 
         if not nodes:
-            result["message"] = "No nodes extracted from this input — try a richer thought."
+            result["message"] = "Nothing structural to extract — input felt thin."
             return result
 
+        # --- 4. Persist
         success, msg, written_ids = self.db.write_graph(
             nodes, relationships, self.session_id, source_text=raw_input
         )
-        result["success"] = success
+        result["persisted"] = success
         result["message"] = msg
         if not success:
+            result["error"] = msg
             return result
 
+        # --- 5. Contradiction detection (best effort)
         try:
             result["contradictions"] = self._detect_contradictions(nodes, written_ids)
-        except Exception as e:
-            print(f"⚠ Contradiction detection failed: {e}")
-
-        try:
-            result["followup_question"] = self._generate_followup(
-                raw_input, nodes, result["contradictions"]
-            )
-        except Exception as e:
-            print(f"⚠ Follow-up generation failed: {e}")
+        except Exception:
+            pass
 
         return result
 
@@ -119,7 +168,6 @@ class MindMirrorEngine:
                 })
         if not existing:
             return []
-
         seen = set()
         unique_existing = []
         for e in existing:
@@ -127,7 +175,6 @@ class MindMirrorEngine:
                 continue
             seen.add(e["id"])
             unique_existing.append(e)
-
         payload = json.dumps({
             "new_nodes": [
                 {"id": n["id"], "class": n.get("class"), "label": n.get("label")}
@@ -141,30 +188,8 @@ class MindMirrorEngine:
         except json.JSONDecodeError:
             return []
 
-    def _generate_followup(self, raw_input, nodes, contradictions):
-        # Pull context from the wider map so the question feels like it remembers the user
-        recurring = self.db.get_recurring_nodes(min_times_seen=2, limit=8)
-        recent_nodes, _ = self.db.get_recent_changes(days=14)
-        sample = self.db.get_sample_nodes(limit=15)
-
-        payload = json.dumps({
-            "what_user_just_said": raw_input,
-            "extracted_from_this_thought": [
-                {"id": n["id"], "class": n.get("class"), "label": n.get("label")}
-                for n in nodes
-            ],
-            "contradictions_just_detected": contradictions,
-            "recurring_load_bearers_in_their_map": recurring,
-            "recent_nodes_last_14_days": recent_nodes[:10],
-            "other_nodes_in_their_map": [
-                {"label": s["label"], "class": s.get("class")} for s in sample
-            ],
-        })
-        return self._chat(FOLLOWUP_PROMPT, payload, temperature=0.6).strip().strip('"')
-
-    # ---------------------------------------------------------------- insight
+    # ============================================================ INSIGHT
     def generate_insight(self, session_id=None):
-        """Returns a dict: {shape, tension, load_bearers, question} or {error}."""
         graph_map = self.db.get_full_graph(session_id=session_id)
         if not graph_map:
             return {"error": "Map is empty for this scope. Commit some thoughts first."}
@@ -179,14 +204,11 @@ class MindMirrorEngine:
             return {"error": f"Couldn't read the map: {e}"}
 
     def generate_delta_insight(self, days=7):
-        """Returns a dict: {shift, recurring, blindspot, question} or {error}."""
         new_nodes, new_rels = self.db.get_recent_changes(days=days)
         recurring = self.db.get_recurring_nodes(min_times_seen=2, limit=10)
         sample = self.db.get_sample_nodes(limit=15)
-
         if not new_nodes and not recurring and not sample:
-            return {"error": f"No activity yet — commit a thought first."}
-
+            return {"error": "No activity yet — commit a thought first."}
         payload = json.dumps({
             "window_days": days,
             "new_nodes": new_nodes,
@@ -201,7 +223,6 @@ class MindMirrorEngine:
             return {"error": f"Couldn't reflect: {e}"}
 
     def get_snapshot_stats(self):
-        """Quick stats for the snapshot tiles: total nodes, sessions, recent activity, recurring."""
         sessions = self.db.list_sessions()
         total_nodes = sum(c for _, c in sessions)
         recent_nodes, _ = self.db.get_recent_changes(days=7)
@@ -217,32 +238,23 @@ class MindMirrorEngine:
             "top_recurring": recurring[:3],
         }
 
-    # ---------------------------------------------------------------- greeting
+    # ============================================================ greeting
     def generate_greeting(self):
-        """One- or two-sentence greeting personalized to current graph state."""
         sessions = self.db.list_sessions()
         total_nodes = sum(cnt for _, cnt in sessions)
-
         if total_nodes == 0:
-            return "Nothing in your map yet. Tell me what's been on your mind."
-
-        recent_nodes, _ = self.db.get_recent_changes(days=14)
+            return "Nothing in your map yet. Tell me what's on your mind."
         recurring = self.db.get_recurring_nodes(min_times_seen=2, limit=3)
-        sample_nodes = self.db.get_sample_nodes(limit=12)
+        sample = self.db.get_sample_nodes(limit=12)
         last_session_id = sessions[0][0] if sessions else None
-
         try:
             payload = json.dumps({
                 "total_nodes_in_graph": total_nodes,
                 "session_count": len(sessions),
                 "last_session_id": last_session_id,
-                "sample_nodes_in_map": sample_nodes,
-                "recent_nodes_last_14_days": recent_nodes[:10],
+                "sample_nodes_in_map": sample,
                 "recurring_nodes": recurring,
             })
             return self._chat(GREETING_PROMPT, payload, temperature=0.6).strip().strip('"')
         except Exception:
-            sample_label = sample_nodes[0]["label"] if sample_nodes else None
-            if sample_label:
-                return f"You've got {total_nodes} threads in your map — last one was about \"{sample_label}\". What's on your mind today?"
             return f"You've got {total_nodes} threads in your map. What's on your mind?"
