@@ -12,6 +12,7 @@ from prompt_library import (
     CONTRADICTION_PROMPT,
     FOLLOWUP_PROMPT,
     DELTA_INSIGHT_PROMPT,
+    GREETING_PROMPT,
 )
 
 load_dotenv()
@@ -24,7 +25,6 @@ class MindMirrorEngine:
             raise RuntimeError("GROQ_API_KEY missing — set it in .env")
         self.client = Groq(api_key=api_key)
         self.model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-        self.whisper_model = os.getenv("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo")
         self.db = MindMirrorDB()
         self.session_id = self._new_session_id()
 
@@ -172,14 +172,32 @@ class MindMirrorEngine:
         })
         return self._chat(DELTA_INSIGHT_PROMPT, payload, temperature=0.4)
 
-    # ---------------------------------------------------------------- voice
-    def transcribe_voice(self, audio_bytes, filename="voice.webm"):
+    # ---------------------------------------------------------------- greeting
+    def generate_greeting(self):
+        """One- or two-sentence greeting personalized to current graph state."""
+        sessions = self.db.list_sessions()
+        total_nodes = sum(cnt for _, cnt in sessions)
+
+        if total_nodes == 0:
+            return "Nothing in your map yet. Tell me what's been on your mind."
+
+        recent_nodes, _ = self.db.get_recent_changes(days=14)
+        recurring = self.db.get_recurring_nodes(min_times_seen=2, limit=3)
+        sample_nodes = self.db.get_sample_nodes(limit=12)
+        last_session_id = sessions[0][0] if sessions else None
+
         try:
-            transcription = self.client.audio.transcriptions.create(
-                file=(filename, audio_bytes),
-                model=self.whisper_model,
-                response_format="text",
-            )
-            return str(transcription).strip()
-        except Exception as e:
-            raise RuntimeError(f"Voice transcription failed: {e}")
+            payload = json.dumps({
+                "total_nodes_in_graph": total_nodes,
+                "session_count": len(sessions),
+                "last_session_id": last_session_id,
+                "sample_nodes_in_map": sample_nodes,
+                "recent_nodes_last_14_days": recent_nodes[:10],
+                "recurring_nodes": recurring,
+            })
+            return self._chat(GREETING_PROMPT, payload, temperature=0.6).strip().strip('"')
+        except Exception:
+            sample_label = sample_nodes[0]["label"] if sample_nodes else None
+            if sample_label:
+                return f"You've got {total_nodes} threads in your map — last one was about \"{sample_label}\". What's on your mind today?"
+            return f"You've got {total_nodes} threads in your map. What's on your mind?"

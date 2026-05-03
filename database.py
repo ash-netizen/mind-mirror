@@ -256,6 +256,60 @@ class MindMirrorDB:
                 print(f"❌ Graph fetch error: {e}")
         return nodes, edges
 
+    def get_sample_nodes(self, limit=12):
+        """Sample recent-ish nodes for greeting context, regardless of timestamps."""
+        q = (
+            "MATCH (n) WHERE NOT n:Thought "
+            "RETURN n.id AS id, n.label AS label, labels(n)[0] AS class, "
+            "coalesce(n.last_seen_at, n.created_at, '') AS seen_at "
+            "ORDER BY seen_at DESC LIMIT $limit"
+        )
+        with self._session() as session:
+            try:
+                return [dict(r) for r in session.run(q, limit=limit)]
+            except Exception as e:
+                print(f"❌ Sample nodes error: {e}")
+                return []
+
+    def get_node_details(self, node_id):
+        """Return rich detail for one node: properties, source thoughts, neighbors."""
+        node_q = (
+            "MATCH (n {id: $nid}) WHERE NOT n:Thought "
+            "RETURN n, labels(n)[0] AS class"
+        )
+        thoughts_q = (
+            "MATCH (t:Thought)-[:EXTRACTED]->(n {id: $nid}) "
+            "RETURN t.text AS text, t.created_at AS created_at, t.session_id AS session_id "
+            "ORDER BY t.created_at DESC LIMIT 10"
+        )
+        neighbors_q = (
+            "MATCH (n {id: $nid})-[r]-(m) WHERE NOT m:Thought "
+            "RETURN type(r) AS rel, m.id AS id, m.label AS label, labels(m)[0] AS class, "
+            "startNode(r).id = $nid AS outgoing "
+            "LIMIT 50"
+        )
+        with self._session() as session:
+            try:
+                node_rec = session.run(node_q, nid=node_id).single()
+                if not node_rec:
+                    return None
+                n = node_rec["n"]
+                details = {
+                    "id": n.get("id"),
+                    "label": n.get("label"),
+                    "class": node_rec["class"],
+                    "created_at": n.get("created_at"),
+                    "last_seen_at": n.get("last_seen_at"),
+                    "times_seen": n.get("times_seen", 1),
+                    "session_id": n.get("session_id"),
+                    "thoughts": [dict(r) for r in session.run(thoughts_q, nid=node_id)],
+                    "neighbors": [dict(r) for r in session.run(neighbors_q, nid=node_id)],
+                }
+                return details
+            except Exception as e:
+                print(f"❌ Node detail error: {e}")
+                return None
+
     def reset(self):
         with self._session() as session:
             session.execute_write(lambda tx: tx.run("MATCH (n) DETACH DELETE n"))

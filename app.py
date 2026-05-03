@@ -1,14 +1,13 @@
 import streamlit as st
 from streamlit_agraph import agraph, Node, Edge, Config
-from streamlit_mic_recorder import mic_recorder
 
 from mind_mirror import MindMirrorEngine
 
 st.set_page_config(
-    page_title="Mind Mirror | Cognitive Auditor",
-    page_icon="🧠",
-    layout="wide",
-    initial_sidebar_state="expanded",
+    page_title="Mind Mirror",
+    page_icon="🪞",
+    layout="centered",
+    initial_sidebar_state="collapsed",
 )
 
 CLASS_COLORS = {
@@ -23,6 +22,34 @@ CLASS_COLORS = {
     "UNKNOWN": "#888888",
 }
 
+CLASS_LABEL = {
+    "CORE_BELIEF": "belief",
+    "VALUE": "value",
+    "TRIGGER": "trigger",
+    "COGNITIVE_PROCESS": "thought process",
+    "AFFECT": "feeling",
+    "BEHAVIOR": "behavior",
+    "INTENT": "intent",
+    "PATTERN": "pattern",
+    "UNKNOWN": "node",
+}
+
+# Subtle CSS for journal feel
+st.markdown(
+    """
+    <style>
+      .block-container { max-width: 760px; padding-top: 2rem; padding-bottom: 4rem; }
+      .stTextArea textarea { font-size: 1.05rem; line-height: 1.5; }
+      .greeting { font-size: 1.1rem; color: #c9c9c9; line-height: 1.6; margin: 0.5rem 0 2rem 0; font-style: italic; }
+      .journal-entry { padding: 1rem 1.25rem; border-left: 3px solid #444; background: rgba(255,255,255,0.02); margin: 1rem 0; border-radius: 4px; }
+      .journal-entry .meta { font-size: 0.78rem; color: #888; margin-bottom: 0.5rem; }
+      .reply-box { margin-left: 1.5rem; border-left: 3px solid #4361EE; padding-left: 1rem; }
+      div[data-testid="stExpander"] { border: 1px solid #333; border-radius: 6px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 def _scope_to_sid(scope_label: str):
     if scope_label == "All sessions":
@@ -32,230 +59,311 @@ def _scope_to_sid(scope_label: str):
 
 def _init_state():
     if "mirror" not in st.session_state:
-        with st.spinner("Synchronizing Cognitive Ontology..."):
+        with st.spinner("Loading your map..."):
             st.session_state.mirror = MindMirrorEngine()
+            st.session_state.greeting = st.session_state.mirror.generate_greeting()
     st.session_state.setdefault("view_scope", "All sessions")
-    st.session_state.setdefault("last_result", None)
-    st.session_state.setdefault("pending_input", "")
+    st.session_state.setdefault("journal", [])  # list of dicts: {input, result, reply_open}
     st.session_state.setdefault("ingesting", False)
     st.session_state.setdefault("confirm_nuke", False)
+    st.session_state.setdefault("selected_node", None)
 
 
 _init_state()
+mirror = st.session_state.mirror
 
-st.title("🧠 Mind Mirror")
-st.markdown("*Local Cognitive Pattern Analyzer — extended consciousness as a graph*")
-st.markdown("---")
+# ============================================================ HEADER + GREETING
+st.markdown("# 🪞 Mind Mirror")
+st.markdown(f"<div class='greeting'>{st.session_state.greeting}</div>", unsafe_allow_html=True)
 
-# ============================================================ INGESTION + AUDIT
-col_ingest, col_audit = st.columns([1, 1], gap="large")
 
-with col_ingest:
-    st.subheader("📡 Ingestion Zone")
-    st.caption("Type or speak a thought. The graph remembers and reflects.")
+# ============================================================ JOURNAL HISTORY (this visit)
+def _render_entry(idx, entry):
+    res = entry["result"]
+    st.markdown("<div class='journal-entry'>", unsafe_allow_html=True)
+    st.markdown(f"<div class='meta'>You said</div>", unsafe_allow_html=True)
+    st.markdown(f"_{entry['input']}_")
 
-    # ---- Voice capture
-    voice = mic_recorder(
-        start_prompt="🎙 Start recording",
-        stop_prompt="⏹ Stop & transcribe",
-        just_once=True,
-        use_container_width=True,
-        format="webm",
-        key="voice_recorder",
-    )
-    if voice and voice.get("bytes"):
-        with st.spinner("Transcribing voice via Groq Whisper..."):
-            try:
-                text = st.session_state.mirror.transcribe_voice(voice["bytes"])
-                st.session_state.pending_input = text
-                st.toast(f"📝 Transcribed {len(text)} chars")
-            except Exception as e:
-                st.error(f"Voice failed: {e}")
-
-    thought_input = st.text_area(
-        "Signal Input",
-        value=st.session_state.pending_input,
-        placeholder="Enter a thought, a conflict, a contradiction, an observation...",
-        height=200,
-        label_visibility="collapsed",
-        key="thought_textarea",
-    )
-
-    commit_disabled = st.session_state.ingesting or len(thought_input.strip()) < 10
-    btn_label = "⏳ Processing..." if st.session_state.ingesting else "Commit to Graph"
-
-    if st.button(btn_label, type="primary", use_container_width=True, disabled=commit_disabled):
-        st.session_state.ingesting = True
-        with st.status("Processing Cognitive Pipeline...", expanded=True) as status:
-            st.write("Extracting structure via Groq Llama 3.3 70B...")
-            result = st.session_state.mirror.ingest_thought(thought_input)
-            st.session_state.last_result = result
-            st.session_state.pending_input = ""
-            if result["success"]:
-                status.update(label="✅ Persistence Complete", state="complete", expanded=False)
-            else:
-                status.update(label="❌ Pipeline Failure", state="error")
-        st.session_state.ingesting = False
-        st.rerun()
-
-    # ---- Show last commit results
-    res = st.session_state.last_result
-    if res:
-        if res["success"]:
-            st.success(f"✅ {res['message']}")
-
-            if res["contradictions"]:
-                st.warning(f"⚠ {len(res['contradictions'])} contradiction(s) detected:")
-                for c in res["contradictions"]:
-                    st.markdown(
-                        f"- **`{c['new_node_id']}`** vs **`{c['existing_node_id']}`**  \n"
-                        f"  {c['explanation']}"
-                    )
-
-            if res["followup_question"]:
-                st.info(f"💭 **Follow-up:** {res['followup_question']}")
-        else:
-            st.error(f"Error: {res['message']}")
-
-with col_audit:
-    st.subheader("🔍 Reflection Zone")
-
-    audit_tab1, audit_tab2 = st.tabs(["Delta (Last 7 days)", "Full Topology Audit"])
-
-    with audit_tab1:
-        st.caption("What changed, what you keep returning to, what you're avoiding.")
-        if st.button("Generate Delta Report", use_container_width=True):
-            with st.spinner("Computing delta + recurring patterns..."):
-                try:
-                    report = st.session_state.mirror.generate_delta_insight(days=7)
-                    st.markdown(report)
-                except Exception as e:
-                    st.error(f"Failed: {e}")
-
-    with audit_tab2:
-        st.caption("Full structural audit of the current scope.")
-        if st.button("Generate Full Insight", use_container_width=True):
-            with st.spinner("Analyzing entire architecture..."):
-                try:
-                    scope_sid = _scope_to_sid(st.session_state.view_scope)
-                    report = st.session_state.mirror.generate_insight(session_id=scope_sid)
-                    st.markdown(report)
-                except Exception as e:
-                    st.error(f"Failed: {e}")
-
-# ============================================================ TOPOLOGY VIZ
-st.markdown("---")
-st.subheader("🌐 Cognitive Topology")
-st.caption(f"Viewing: **{st.session_state.view_scope}** — drag nodes to explore.")
-
-try:
-    nodes_data, edges_data = st.session_state.mirror.db.get_graph_data(
-        session_id=_scope_to_sid(st.session_state.view_scope)
-    )
-except Exception as e:
-    st.error(f"Couldn't fetch graph: {e}")
-    nodes_data, edges_data = [], []
-
-if not nodes_data:
-    st.info("Graph is empty for this scope. Commit a thought above to begin mapping.")
-else:
-    # Dedupe nodes by id
-    seen_ids = set()
-    unique_nodes = []
-    for n in nodes_data:
-        if n["id"] in seen_ids:
-            continue
-        seen_ids.add(n["id"])
-        unique_nodes.append(n)
-
-    seen_edges = set()
-    unique_edges = []
-    for e in edges_data:
-        key = (e["source"], e["target"], e["rel"])
-        if key in seen_edges:
-            continue
-        seen_edges.add(key)
-        unique_edges.append(e)
-
-    viz_nodes = [
-        Node(
-            id=n["id"],
-            label=n["label"],
-            size=20,
-            color=CLASS_COLORS.get(n["class"], CLASS_COLORS["UNKNOWN"]),
-            title=f"{n['class']}: {n['label']}",
-        )
-        for n in unique_nodes
-    ]
-    viz_edges = [
-        Edge(source=e["source"], target=e["target"], label=e["rel"])
-        for e in unique_edges
-    ]
-    config = Config(
-        width="100%",
-        height=600,
-        directed=True,
-        physics=True,
-        hierarchical=False,
-        nodeHighlightBehavior=True,
-        highlightColor="#FFD60A",
-        collapsible=False,
-    )
-    agraph(nodes=viz_nodes, edges=viz_edges, config=config)
-
-    legend_cols = st.columns(len(CLASS_COLORS) - 1)
-    for i, (cls, color) in enumerate((c for c in CLASS_COLORS.items() if c[0] != "UNKNOWN")):
-        with legend_cols[i]:
+    if res["success"]:
+        nodes = res["extraction"]["nodes"]
+        if nodes:
+            chips = " · ".join(
+                f"<span style='color:{CLASS_COLORS.get(n['class'], '#888')}'>"
+                f"{n.get('label', n['id'])}</span>"
+                for n in nodes
+            )
             st.markdown(
-                f"<div style='display:flex;align-items:center;gap:6px;font-size:12px;'>"
-                f"<div style='width:12px;height:12px;background:{color};border-radius:50%;'></div>"
-                f"<span>{cls}</span></div>",
+                f"<div style='margin-top:0.5rem; font-size:0.9rem;'>{chips}</div>",
                 unsafe_allow_html=True,
             )
 
-# ============================================================ SIDEBAR
-with st.sidebar:
-    st.title("Sessions")
-    st.write(f"**Writing to:** `{st.session_state.mirror.session_id}`")
+        if res["contradictions"]:
+            for c in res["contradictions"]:
+                st.markdown(
+                    f"⚠ **Tension:** {c['explanation']}",
+                )
 
-    if st.button("➕ Start New Session", use_container_width=True):
-        new_sid = st.session_state.mirror.start_new_session()
-        st.toast(f"New session: {new_sid}")
+        if res["followup_question"]:
+            st.markdown(f"**↳** {res['followup_question']}")
+            if not entry.get("reply_submitted"):
+                reply_key = f"reply_{idx}"
+                with st.container():
+                    st.markdown("<div class='reply-box'>", unsafe_allow_html=True)
+                    reply_text = st.text_area(
+                        "Reply",
+                        key=reply_key,
+                        placeholder="Reply to deepen the thread...",
+                        height=80,
+                        label_visibility="collapsed",
+                    )
+                    cols = st.columns([1, 4])
+                    with cols[0]:
+                        if st.button("Reply", key=f"reply_btn_{idx}", disabled=len(reply_text.strip()) < 5):
+                            with st.spinner("..."):
+                                reply_result = mirror.ingest_thought(reply_text)
+                                st.session_state.journal.append({
+                                    "input": reply_text,
+                                    "result": reply_result,
+                                    "is_reply": True,
+                                })
+                                entry["reply_submitted"] = True
+                                st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
+    else:
+        st.error(res["message"])
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+for i, entry in enumerate(st.session_state.journal):
+    _render_entry(i, entry)
+
+
+# ============================================================ INPUT
+st.markdown("---")
+
+with st.form("intake_form", clear_on_submit=True):
+    thought_input = st.text_area(
+        "What's on your mind?",
+        placeholder="A thought, a tension, something you noticed...",
+        height=140,
+        key="thought_textarea",
+    )
+    submitted = st.form_submit_button(
+        "Commit", type="primary", use_container_width=True,
+        disabled=st.session_state.ingesting,
+    )
+
+if submitted and len(thought_input.strip()) >= 10:
+    st.session_state.ingesting = True
+    with st.spinner("Reading you..."):
+        result = mirror.ingest_thought(thought_input)
+        st.session_state.journal.append({
+            "input": thought_input,
+            "result": result,
+            "is_reply": False,
+        })
+    st.session_state.ingesting = False
+    st.rerun()
+elif submitted and len(thought_input.strip()) < 10:
+    st.warning("Give me a bit more — at least a sentence.")
+
+
+# ============================================================ REFLECT
+st.markdown("---")
+st.markdown("### Reflect")
+
+c1, c2 = st.columns(2)
+with c1:
+    if st.button("📊 What's shifted recently", use_container_width=True):
+        with st.spinner("Looking at the last 7 days..."):
+            try:
+                report = mirror.generate_delta_insight(days=7)
+                st.markdown(report)
+            except Exception as e:
+                st.error(f"Failed: {e}")
+
+with c2:
+    if st.button("🌐 Read the whole map", use_container_width=True):
+        with st.spinner("Reading the map..."):
+            try:
+                scope_sid = _scope_to_sid(st.session_state.view_scope)
+                report = mirror.generate_insight(session_id=scope_sid)
+                st.markdown(report)
+            except Exception as e:
+                st.error(f"Failed: {e}")
+
+
+# ============================================================ MAP (collapsed by default)
+st.markdown("---")
+with st.expander("🗺 Your map", expanded=False):
+    try:
+        nodes_data, edges_data = mirror.db.get_graph_data(
+            session_id=_scope_to_sid(st.session_state.view_scope)
+        )
+    except Exception as e:
+        st.error(f"Couldn't fetch map: {e}")
+        nodes_data, edges_data = [], []
+
+    if not nodes_data:
+        st.info("Empty for this scope. Commit a thought to start mapping.")
+    else:
+        # Dedupe
+        seen_ids = set()
+        unique_nodes = []
+        for n in nodes_data:
+            if n["id"] in seen_ids:
+                continue
+            seen_ids.add(n["id"])
+            unique_nodes.append(n)
+
+        seen_edges = set()
+        unique_edges = []
+        for e in edges_data:
+            key = (e["source"], e["target"], e["rel"])
+            if key in seen_edges:
+                continue
+            seen_edges.add(key)
+            unique_edges.append(e)
+
+        # Truncate long labels for visual clarity
+        def _short(label, n=28):
+            label = label or ""
+            return label if len(label) <= n else label[: n - 1] + "…"
+
+        viz_nodes = [
+            Node(
+                id=n["id"],
+                label=_short(n["label"]),
+                size=18,
+                color=CLASS_COLORS.get(n["class"], CLASS_COLORS["UNKNOWN"]),
+                title=f"{CLASS_LABEL.get(n['class'], n['class'])}: {n['label']}",
+                font={"size": 12, "color": "#e8e8e8", "strokeWidth": 3, "strokeColor": "#0e1117"},
+            )
+            for n in unique_nodes
+        ]
+        # Show edge labels only on hover (kept in title), keep label empty for clean canvas
+        viz_edges = [
+            Edge(
+                source=e["source"],
+                target=e["target"],
+                label="",
+                title=e["rel"].lower().replace("_", " "),
+                color={"color": "#555", "highlight": "#FFD60A"},
+                width=1,
+            )
+            for e in unique_edges
+        ]
+        config = Config(
+            width="100%",
+            height=560,
+            directed=True,
+            physics={
+                "enabled": True,
+                "solver": "forceAtlas2Based",
+                "forceAtlas2Based": {
+                    "gravitationalConstant": -80,
+                    "centralGravity": 0.01,
+                    "springLength": 180,
+                    "springConstant": 0.05,
+                    "damping": 0.6,
+                    "avoidOverlap": 1,
+                },
+                "stabilization": {"enabled": True, "iterations": 250, "fit": True},
+            },
+            interaction={"hover": True, "tooltipDelay": 100, "navigationButtons": True},
+            nodeHighlightBehavior=True,
+            highlightColor="#FFD60A",
+            collapsible=False,
+        )
+        clicked_node_id = agraph(nodes=viz_nodes, edges=viz_edges, config=config)
+        if clicked_node_id and clicked_node_id != st.session_state.selected_node:
+            st.session_state.selected_node = clicked_node_id
+            st.rerun()
+
+        # Legend
+        legend_html = "<div style='display:flex; flex-wrap:wrap; gap:14px; font-size:12px; margin-top:8px;'>"
+        for cls in [c for c in CLASS_COLORS if c != "UNKNOWN"]:
+            legend_html += (
+                f"<div style='display:flex; align-items:center; gap:5px;'>"
+                f"<div style='width:10px;height:10px;border-radius:50%;background:{CLASS_COLORS[cls]}'></div>"
+                f"<span style='color:#aaa'>{CLASS_LABEL[cls]}</span></div>"
+            )
+        legend_html += "</div>"
+        st.markdown(legend_html, unsafe_allow_html=True)
+
+        # Node detail panel (when clicked)
+        if st.session_state.selected_node:
+            details = mirror.db.get_node_details(st.session_state.selected_node)
+            if details:
+                st.markdown("---")
+                cls_human = CLASS_LABEL.get(details["class"], details["class"])
+                st.markdown(f"### `{details['label']}`  *({cls_human})*")
+
+                meta_bits = []
+                if details.get("times_seen"):
+                    meta_bits.append(f"appeared {details['times_seen']}×")
+                if details.get("created_at"):
+                    meta_bits.append(f"first seen {details['created_at'][:10]}")
+                if details.get("last_seen_at") and details.get("last_seen_at") != details.get("created_at"):
+                    meta_bits.append(f"last seen {details['last_seen_at'][:10]}")
+                if meta_bits:
+                    st.caption(" · ".join(meta_bits))
+
+                if details["thoughts"]:
+                    st.markdown("**Originating thoughts**")
+                    for t in details["thoughts"][:5]:
+                        st.markdown(f"> _{t['text']}_  \n  <span style='font-size:0.75rem;color:#888'>{t['created_at'][:10]}</span>", unsafe_allow_html=True)
+
+                if details["neighbors"]:
+                    st.markdown("**Connected to**")
+                    for nb in details["neighbors"][:15]:
+                        arrow = "→" if nb["outgoing"] else "←"
+                        rel = nb["rel"].lower().replace("_", " ")
+                        st.markdown(f"- {arrow} `{nb['label'] or nb['id']}` *({rel})*")
+
+                if st.button("Close", key="close_node_detail"):
+                    st.session_state.selected_node = None
+                    st.rerun()
+
+
+# ============================================================ SIDEBAR (settings)
+with st.sidebar:
+    st.markdown("### Sessions")
+    st.caption(f"Writing to `{mirror.session_id}`")
+    if st.button("Start new session", use_container_width=True):
+        mirror.start_new_session()
+        st.session_state.journal = []
+        st.session_state.greeting = mirror.generate_greeting()
         st.rerun()
 
-    sessions = st.session_state.mirror.db.list_sessions()
-    scope_options = ["All sessions"] + [f"{sid} ({cnt} nodes)" for sid, cnt in sessions]
-
+    sessions = mirror.db.list_sessions()
+    scope_options = ["All sessions"] + [f"{sid} ({cnt})" for sid, cnt in sessions]
     if st.session_state.view_scope not in scope_options:
         st.session_state.view_scope = "All sessions"
-
     st.session_state.view_scope = st.selectbox(
-        "View scope",
-        options=scope_options,
+        "View scope", options=scope_options,
         index=scope_options.index(st.session_state.view_scope),
     )
 
     st.divider()
-    st.title("System")
-    st.write(f"**Model:** `{st.session_state.mirror.model}`")
-    st.write(f"**STT:** `{st.session_state.mirror.whisper_model}`")
-    st.write(f"**DB:** `Neo4j AuraDB`")
+    st.markdown("### System")
+    st.caption(f"Model: `{mirror.model}`")
+    st.caption(f"DB: Neo4j AuraDB")
 
     st.divider()
-    st.subheader("⚠ Danger Zone")
     if not st.session_state.confirm_nuke:
-        if st.button("Reset Graph", use_container_width=True):
+        if st.button("⚠ Reset graph", use_container_width=True):
             st.session_state.confirm_nuke = True
             st.rerun()
     else:
-        st.error("This permanently deletes ALL nodes. Are you sure?")
+        st.error("Permanently delete ALL nodes?")
         c1, c2 = st.columns(2)
         with c1:
             if st.button("Yes, nuke", type="primary", use_container_width=True):
-                st.session_state.mirror.db.reset()
+                mirror.db.reset()
                 st.session_state.confirm_nuke = False
-                st.session_state.last_result = None
-                st.toast("Graph reset.")
+                st.session_state.journal = []
+                st.session_state.greeting = mirror.generate_greeting()
                 st.rerun()
         with c2:
             if st.button("Cancel", use_container_width=True):
@@ -263,4 +371,4 @@ with st.sidebar:
                 st.rerun()
 
     st.markdown("---")
-    st.caption("Mind Mirror v2.0 | Extended Consciousness")
+    st.caption("Mind Mirror v2.1")
