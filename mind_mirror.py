@@ -154,23 +154,58 @@ class MindMirrorEngine:
 
     # ---------------------------------------------------------------- insight
     def generate_insight(self, session_id=None):
+        """Returns a dict: {shape, tension, load_bearers, question} or {error}."""
         graph_map = self.db.get_full_graph(session_id=session_id)
         if not graph_map:
-            return "Knowledge Graph is empty for this scope. Map some thoughts first."
-        return self._chat(INSIGHT_PROMPT, f"CURRENT GRAPH TOPOLOGY:\n\n{graph_map}")
+            return {"error": "Map is empty for this scope. Commit some thoughts first."}
+        try:
+            raw = self._chat(
+                INSIGHT_PROMPT,
+                f"CURRENT GRAPH TOPOLOGY:\n\n{graph_map}",
+                json_mode=True,
+            )
+            return json.loads(raw)
+        except Exception as e:
+            return {"error": f"Couldn't read the map: {e}"}
 
     def generate_delta_insight(self, days=7):
+        """Returns a dict: {shift, recurring, blindspot, question} or {error}."""
         new_nodes, new_rels = self.db.get_recent_changes(days=days)
         recurring = self.db.get_recurring_nodes(min_times_seen=2, limit=10)
-        if not new_nodes and not recurring:
-            return f"No activity in the last {days} days, and no recurring patterns yet."
+        sample = self.db.get_sample_nodes(limit=15)
+
+        if not new_nodes and not recurring and not sample:
+            return {"error": f"No activity yet — commit a thought first."}
+
         payload = json.dumps({
             "window_days": days,
             "new_nodes": new_nodes,
             "new_relationships": new_rels,
             "recurring_load_bearers": recurring,
+            "sample_nodes_in_map": sample,
         })
-        return self._chat(DELTA_INSIGHT_PROMPT, payload, temperature=0.4)
+        try:
+            raw = self._chat(DELTA_INSIGHT_PROMPT, payload, temperature=0.4, json_mode=True)
+            return json.loads(raw)
+        except Exception as e:
+            return {"error": f"Couldn't reflect: {e}"}
+
+    def get_snapshot_stats(self):
+        """Quick stats for the snapshot tiles: total nodes, sessions, recent activity, recurring."""
+        sessions = self.db.list_sessions()
+        total_nodes = sum(c for _, c in sessions)
+        recent_nodes, _ = self.db.get_recent_changes(days=7)
+        recurring = self.db.get_recurring_nodes(min_times_seen=2, limit=10)
+        sample = self.db.get_sample_nodes(limit=1)
+        last_seen = sample[0]["seen_at"][:10] if sample and sample[0].get("seen_at") else "—"
+        return {
+            "total_nodes": total_nodes,
+            "session_count": len(sessions),
+            "new_last_7d": len(recent_nodes),
+            "recurring_count": len(recurring),
+            "last_seen": last_seen,
+            "top_recurring": recurring[:3],
+        }
 
     # ---------------------------------------------------------------- greeting
     def generate_greeting(self):
